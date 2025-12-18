@@ -1,0 +1,11 @@
+from django.urls import path
+from .views import InvoiceListCreateView, InvoiceDetailView, DashboardSummaryView, ReportView, ReceiptListCreateView, ReceiptDetailView
+
+urlpatterns = [
+    path('invoices/', InvoiceListCreateView.as_view(), name='invoice-list-create'),
+    path('invoices/<int:pk>/', InvoiceDetailView.as_view(), name='invoice-detail'),
+    path('dashboard/summary/', DashboardSummaryView.as_view(), name='dashboard-summary'),
+    path('reports/', ReportView.as_view(), name='reports'),
+    path('receipts/', ReceiptListCreateView.as_view(), name='receipt-list-create'),
+    path('receipts/<int:pk>/', ReceiptDetailView.as_view(), name='receipt-detail'),
+]
