@@ -1,6 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import receiptService from '../services/receiptService';
+import { formatCurrency } from '../utils/currency';
+import Spinner from './ui/Spinner';
+import ErrorBanner from './ui/ErrorBanner';
+import HomeButton from './ui/HomeButton';
 
 const ReceiptDetail = () => {
   const { id } = useParams();
@@ -8,6 +12,9 @@ const ReceiptDetail = () => {
   const [receipt, setReceipt] = useState(null);
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState({});
+
+  const formatMoney = (value, currency) => formatCurrency(value, currency);
+
 
   useEffect(() => {
     loadReceipt();
@@ -46,36 +53,29 @@ const ReceiptDetail = () => {
   };
 
   if (loading) {
-    return <div className="loading">Loading receipt...</div>;
+    return <Spinner label="Loading receipt..." />;
   }
 
   if (!receipt) {
     return (
-      <div className="invoice-detail-container">
-        <div className="invoice-header">
-          <h2>Receipt Not Found</h2>
-          <button onClick={() => navigate('/receipts')} className="btn-secondary">
-            Back to Receipts
-          </button>
+      <div className="invoice-detail-container p-4">
+        <div className="invoice-header flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Receipt Not Found</h2>
+          <button onClick={() => navigate('/receipts')} className="btn-secondary">Back to Receipts</button>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="invoice-detail-container">
-      <div className="invoice-header">
-        <h2>Receipt #{receipt.receipt_number}</h2>
-        <div className="invoice-actions">
-          <button onClick={handlePrint} className="btn-secondary">
-            Print
-          </button>
-          <button onClick={handleDelete} className="btn-remove">
-            Delete
-          </button>
-          <button onClick={() => navigate('/receipts')} className="btn-secondary">
-            Back to Receipts
-          </button>
+    <div className="invoice-detail-container p-4">
+      <div className="invoice-header flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold">Receipt #{receipt.receipt_number}</h2>
+        <div className="flex gap-2">
+          <HomeButton />
+          <button onClick={handlePrint} className="btn-secondary">Print</button>
+          <button onClick={handleDelete} className="btn-remove">Delete</button>
+          <button onClick={() => navigate('/receipts')} className="btn-secondary">Back to Receipts</button>
         </div>
       </div>
 
@@ -117,11 +117,31 @@ const ReceiptDetail = () => {
           </div>
         </div>
 
+        {/* Line Items */}
+        {receipt.line_items && receipt.line_items.length > 0 && (
+          <div className="line-items lg:col-span-2 bg-white p-4 rounded shadow-sm mt-4">
+            <h3 className="font-semibold mb-2">Items from Invoice {receipt.invoice_number}</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="text-left text-sm text-gray-600">
+                  <tr><th>Description</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr>
+                </thead>
+                <tbody>
+                  {receipt.line_items.map((item, idx) => (
+                    <tr key={idx} className="border-t"><td>{item.description}</td><td>{item.quantity}</td><td>{formatCurrency(item.unit_price, receipt.currency)}</td><td className="text-right">{formatCurrency(item.total_price, receipt.currency)}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+
         {/* Receipt Summary */}
         <div className="invoice-summary">
           <div className="summary-row total">
             <span>Amount Paid:</span>
-            <span>${receipt.amount_paid.toFixed(2)}</span>
+            <span>{formatCurrency(receipt.amount_paid, receipt.currency)}</span>
           </div>
         </div>
 

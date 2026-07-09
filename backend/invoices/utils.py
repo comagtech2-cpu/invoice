@@ -1,6 +1,6 @@
 import io
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.lib import colors
@@ -43,8 +43,28 @@ def generate_invoice_pdf(invoice_id):
         spaceAfter=12
     )
 
-    # Title
-    elements.append(Paragraph("INVOICE", title_style))
+    # Header (logo + title)
+    header_elements = []
+    logo_img = None
+    if invoice.business and invoice.business.logo:
+        try:
+            logo_path = invoice.business.logo.path
+            logo_img = RLImage(logo_path, width=1.5*inch, height=1.5*inch)
+        except Exception:
+            logo_img = None
+
+    # Build a header table with logo on the left and title centered on the right
+    header_data = [[logo_img or '', Paragraph("INVOICE", title_style)]]
+    header_table = Table(header_data, colWidths=[1.6*inch, None])
+    header_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (1, 0), (1, 0), 'CENTER'),
+        ('LEFTPADDING', (0, 0), (0, 0), 0),
+        ('LEFTPADDING', (1, 0), (1, 0), 0),
+        ('RIGHTPADDING', (1, 0), (1, 0), 0),
+    ]))
+
+    elements.append(header_table)
     elements.append(Spacer(1, 0.2*inch))
 
     # Invoice details

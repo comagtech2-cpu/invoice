@@ -45,62 +45,82 @@
 
 button {
   width: 100%;
-  padding: 0.75rem;
-  background-color: #4F46E5;
+  padding: 0.75rem 1rem;
+  background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
   color: white;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 1rem;
+  font-weight: 500;
+  box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2);
+  transition: all 0.2s ease;
 }
 
 button:hover {
-  background-color: #4338CA;
+  background: linear-gradient(135deg, #4338CA 0%, #6D28D9 100%);
+  box-shadow: 0 4px 8px rgba(79, 70, 229, 0.3);
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2);
 }
 
 button:disabled {
-  background-color: #9CA3AF;
+  background: #9CA3AF;
   cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
 }
 
 .btn-primary {
   width: auto;
-  background-color: #4F46E5;
+  background: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+  box-shadow: 0 2px 4px rgba(79, 70, 229, 0.2);
 }
 
 .btn-primary:hover {
-  background-color: #4338CA;
+  background: linear-gradient(135deg, #4338CA 0%, #6D28D9 100%);
+  box-shadow: 0 4px 8px rgba(79, 70, 229, 0.3);
 }
 
 .btn-secondary {
   width: auto;
-  background-color: #6B7280;
+  background: linear-gradient(135deg, #6B7280 0%, #9CA3AF 100%);
+  box-shadow: 0 2px 4px rgba(107, 114, 128, 0.2);
 }
 
 .btn-secondary:hover {
-  background-color: #4B5563;
+  background: linear-gradient(135deg, #4B5563 0%, #6B7280 100%);
+  box-shadow: 0 4px 8px rgba(107, 114, 128, 0.3);
 }
 
 .btn-remove {
   width: auto;
-  background-color: #DC2626;
+  background: linear-gradient(135deg, #DC2626 0%, #EF4444 100%);
   padding: 0.25rem 0.5rem;
   font-size: 0.875rem;
+  box-shadow: 0 2px 4px rgba(220, 38, 38, 0.2);
 }
 
 .btn-remove:hover {
-  background-color: #B91C1C;
+  background: linear-gradient(135deg, #B91C1C 0%, #DC2626 100%);
+  box-shadow: 0 4px 8px rgba(220, 38, 38, 0.3);
 }
 
 .btn-add-line-item {
   width: auto;
-  background-color: #10B981;
+  background: linear-gradient(135deg, #10B981 0%, #34D399 100%);
   padding: 0.5rem 1rem;
   font-size: 0.875rem;
+  box-shadow: 0 2px 4px rgba(16, 185, 129, 0.2);
 }
 
 .btn-add-line-item:hover {
-  background-color: #059669;
+  background: linear-gradient(135deg, #059669 0%, #10B981 100%);
+  box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
 }
 
 .btn-small {
@@ -408,6 +428,7 @@ button:disabled {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 2rem;
+  margin-top: 1rem;
 }
 
 .invoice-header h2 {
@@ -424,6 +445,10 @@ button:disabled {
   padding: 2rem;
   border-radius: 8px;
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.receipt-list {
+  padding: 3rem 4rem;
 }
 
 .form-section {
@@ -499,21 +524,47 @@ button:disabled {
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
 }
 
-.table-header, .table-row {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 1rem;
-  align-items: center;
-  padding: 0.75rem 0;
+.invoice-table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow-x: auto; /* allow horizontal scroll if needed */
 }
 
-.table-header {
-  font-weight: bold;
+.invoice-table th, .invoice-table td {
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid #e5e7eb;
+  box-sizing: border-box;
+}
+
+.invoice-table th {
+  background-color: #f9fafb;
+  font-weight: 600;
   border-bottom: 2px solid #e5e7eb;
 }
 
+.invoice-table td {
+  font-weight: 400;
+}
+
 .table-cell {
-  padding: 0.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 40px;
+}
+
+/* Right align the actions column */
+.invoice-table .table-cell:last-child {
+  justify-content: flex-end;
+}
+
+/* Ensure small action buttons don't stretch layout */
+.table-cell .btn-small {
+  margin-left: 0;
 }
 
 .table-cell.sortable {
@@ -525,13 +576,46 @@ button:disabled {
   background-color: #f9fafb;
 }
 
-.table-row {
-  border-bottom: 1px solid #f3f4f6;
+/* Column-specific alignment for invoice table
+    1: Invoice # (left)
+    2: Client (left)
+    3: Date (left)
+    4: Due Date (left)
+    5: Currency (center)
+    6: Status (center)
+    7: Amount (right)
+    8: Actions (right)
+ */
+.invoice-table th:nth-child(1),
+.invoice-table td:nth-child(1),
+.invoice-table th:nth-child(2),
+.invoice-table td:nth-child(2),
+.invoice-table th:nth-child(3),
+.invoice-table td:nth-child(3),
+.invoice-table th:nth-child(4),
+.invoice-table td:nth-child(4) {
+  text-align: left;
+}
+.invoice-table th:nth-child(5),
+.invoice-table td:nth-child(5),
+.invoice-table th:nth-child(6),
+.invoice-table td:nth-child(6) {
+  text-align: center;
+}
+.invoice-table th:nth-child(5),
+.invoice-table td:nth-child(5),
+.invoice-table th:nth-child(6),
+.invoice-table td:nth-child(6),
+.invoice-table th:nth-child(7),
+.invoice-table td:nth-child(7),
+.invoice-table th:nth-child(8),
+.invoice-table td:nth-child(8) {
+  text-align: right;
 }
 
-.table-row:last-child {
-  border-bottom: none;
-}
+/* Make status badges centered within their column */
+.invoice-table .table-cell:nth-child(6) .status-badge { margin: 0 auto; }
+
 
 .status-badge {
   padding: 0.25rem 0.5rem;
@@ -629,6 +713,7 @@ button:disabled {
   border-top: 1px solid #e5e7eb;
 }
 
+
 @media print {
   .invoice-header, .btn-secondary, .btn-primary, .btn-remove {
     display: none;
@@ -643,3 +728,51 @@ button:disabled {
     padding: 0;
   }
 }
+
+/* Responsive adjustments for smaller screens */
+@media (max-width: 768px) {
+  /* Hide header on small screens and stack each row as label/value pairs */
+  .invoice-table thead { display: none; }
+
+  .invoice-table tbody tr {
+    display: block;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f3f4f6;
+  }
+
+  .invoice-table tbody tr:last-child { border-bottom: none; }
+
+  .invoice-table tbody td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    white-space: normal;
+    padding: 0.5rem 0.25rem;
+    border-bottom: none;
+  }
+
+  .invoice-table tbody td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: #374151;
+    margin-right: 0.5rem;
+  }
+
+  /* Right align the values for readability */
+  .invoice-table tbody td > *:last-child { text-align: right; }
+}
+
+/* Debug helpers - enable by running in the browser console: document.body.classList.add('debug-tables') */
+body.debug-tables .invoice-table .table-header .table-cell {
+  outline: 2px solid rgba(59,130,246,0.35);
+  background: rgba(59,130,246,0.03);
+  box-sizing: border-box;
+}
+body.debug-tables .invoice-table .table-row .table-cell {
+  outline: 1px dashed rgba(16,185,129,0.25);
+  box-sizing: border-box;
+}
+body.debug-tables .invoice-table .table-row { background: rgba(0,0,0,0.02); }
+
+/* Ensure all table cells use border-box so outlines match box model */
+.table-cell { box-sizing: border-box; }

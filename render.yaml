@@ -1,0 +1,76 @@
+# Render Infrastructure as Code
+# See https://render.com/docs/blueprint-spec for details
+
+services:
+  # 1. Frontend Static Site
+  - type: static
+    name: invoice-saas-frontend
+    env: node
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    publishDir: dist
+    # Add rewrite rule for client-side routing (e.g., React Router)
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  # 2. Redis instance for Celery
+  - type: redis
+    name: invoice-saas-redis
+    ipAllowList: [] # Allow all services in your Render account
+    plan: free # Or a paid plan for production
+
+  # 3. Backend Web Service (Django/Gunicorn)
+  - type: web
+    name: invoice-saas-backend
+    env: python
+    rootDir: backend
+    plan: free # Or a paid plan for production
+    buildCommand: ./deploy.sh
+    startCommand: gunicorn invoice_saaS.wsgi:application
+    healthCheckPath: /api/health/ # You should create this simple health check endpoint
+    envVars:
+      - key: DATABASE_URL
+        fromService:
+          type: psql
+          name: invoice-saas-db # Assumes a Render PostgreSQL DB named this
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: invoice-saas-redis
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true # Let Render generate a secure secret key
+      - key: DEBUG
+        value: false
+      - key: PYTHON_VERSION
+        value: 3.11.5
+
+  # 4. Celery Worker for background tasks
+  - type: worker
+    name: invoice-saas-celery-worker
+    env: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: celery -A invoice_saaS worker --loglevel=info
+    envVars:
+      - fromGroup: invoice-saas-backend # Inherit env vars from the backend service
+
+  # 5. Celery Beat for scheduled tasks
+  - type: worker
+    name: invoice-saas-celery-beat
+    env: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
+    startCommand: celery -A invoice_saaS beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    envVars:
+      - fromGroup: invoice-saas-backend # Inherit env vars from the backend service
+
+databases:
+  # PostgreSQL Database
+  - name: invoice-saas-db
+    plan: free # Or a paid plan for production

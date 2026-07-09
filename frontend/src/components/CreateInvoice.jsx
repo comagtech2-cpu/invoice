@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { FileText, Building, User, Calendar, Plus, Trash2, ArrowLeft } from 'lucide-react';
 import businessService from '../services/businessService';
 import invoiceService from '../services/invoiceService';
+import Spinner from './ui/Spinner';
+import ErrorBanner from './ui/ErrorBanner';
 
 const CreateInvoice = () => {
   const navigate = useNavigate();
@@ -10,15 +12,20 @@ const CreateInvoice = () => {
   const [loading, setLoading] = useState(true);
   const [errors, setErrors] = useState({});
   
+  const [templates, setTemplates] = useState([]);
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
+  const [templatesError, setTemplatesError] = useState(null);
+
   const [invoiceData, setInvoiceData] = useState({
     business: '',
+    template_id: null,
     client_name: '',
     client_email: '',
     client_address: '',
     client_phone: '',
     issue_date: new Date().toISOString().split('T')[0],
-    due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
-    currency: 'USD',
+    due_date: new Date().toISOString().split('T')[0], // Default to issue date
+    currency: 'NGN',
     tax_rate: 0,
     notes: '',
     line_items: [
@@ -37,9 +44,22 @@ const CreateInvoice = () => {
             ...prev,
             business: data[0].id
           }));
+          // Load templates for the first business
+          setLoadingTemplates(true);
+          setTemplatesError(null);
+          try {
+            const templatesRes = await invoiceService.getTemplates(data[0].id);
+            setTemplates(templatesRes);
+          } catch (err) {
+            console.error('Failed to load templates for initial business', err);
+            setTemplates([]);
+            setTemplatesError('Failed to load templates');
+          } finally {
+            setLoadingTemplates(false);
+          }
         }
       } catch (error) {
-        console.error('Failed to load businesses:', error);
+        console.error('Failed to load businesses or templates:', error);
       } finally {
         setLoading(false);
       }
@@ -116,7 +136,7 @@ const CreateInvoice = () => {
       'CNY': '¥',
       'INR': '₹'
     };
-    return symbols[currency] || '$';
+    return symbols[currency] || '₦';
   };
 
   // Utility to get a readable error message from various shapes returned by the API
@@ -212,14 +232,7 @@ const CreateInvoice = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading businesses...</p>
-        </div>
-      </div>
-    );
+    return <Spinner label="Loading businesses..." />;
   }
 
   return (
@@ -258,17 +271,92 @@ const CreateInvoice = () => {
                 id="business"
                 name="business"
                 value={invoiceData.business}
-                onChange={handleInputChange}
-                required
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                onChange={async (e) => {
+                  const businessId = e.target.value;
+                  setInvoiceData(prev => ({...prev, business: businessId, template_id: null}));
+                  setLoadingTemplates(true);
+                  setTemplatesError(null);
+                  try {
+                    const t = await invoiceService.getTemplates(businessId);
+                    setTemplates(t);
+                  } catch (err) {
+                    console.error('Failed to load templates for business', err);
+                    setTemplates([]);
+                    setTemplatesError('Failed to load templates');
+                  } finally {
+                    setLoadingTemplates(false);
+                  }
+                }}
               >
-                <option value="">Select a business</option>
-                {businesses.map(business => (
-                  <option key={business.id} value={business.id}>
-                    {business.name}
-                  </option>
+                {businesses.map(b => (
+                  <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
               </select>
+
+              <label htmlFor="template" className="block text-sm font-medium text-gray-700 mt-4 mb-2">Template (optional)</label>
+              <select id="template" name="template" value={invoiceData.template_id || ''} onChange={async (e) => {
+                const id = e.target.value || null;
+                setInvoiceData({...invoiceData, template_id: id});
+                if (id) {
+                  try {
+                    const tmpl = await invoiceService.getTemplate(id);
+                    // Merge template defaults into invoice data. Only set fields that are not provided by the user yet.
+                    setInvoiceData(prev => ({
+                      ...prev,
+                      line_items: tmpl.defaults?.line_items || prev.line_items,
+                      tax_rate: tmpl.defaults?.tax_rate ?? prev.tax_rate,
+                      currency: tmpl.defaults?.currency || prev.currency,
+                      notes: tmpl.defaults?.notes || prev.notes,
+                    }));
+                  } catch (err) {
+                    console.error('Failed to load template', err);
+                  }
+                }
+              }}>
+                <option value="">-- Select Template --</option>
+                {templates.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
+
+              <div className="mt-2">
+                {loadingTemplates ? (
+                  <div className="mt-2"><Spinner label="Loading templates..." /></div>
+                ) : templatesError ? (
+                  <div className="text-sm text-red-500">{templatesError}</div>
+                ) : templates && templates.length ? (
+                  <div className="flex gap-2 flex-wrap mt-2">
+                    {templates.map(t => (
+                      <button
+                        type="button"
+                        key={t.id}
+                        onClick={async () => {
+                          setInvoiceData(prev => ({...prev, template_id: t.id}));
+                          try {
+                            const tmpl = await invoiceService.getTemplate(t.id);
+                            setInvoiceData(prev => ({
+                              ...prev,
+                              line_items: tmpl.defaults?.line_items || prev.line_items,
+                              tax_rate: tmpl.defaults?.tax_rate ?? prev.tax_rate,
+                              currency: tmpl.defaults?.currency || prev.currency,
+                              notes: tmpl.defaults?.notes || prev.notes,
+                            }));
+                          } catch (err) {
+                            console.error('Failed to load template', err);
+                          }
+                        }}
+                        className={`px-3 py-1 rounded border ${invoiceData.template_id === t.id ? 'border-indigo-600 bg-indigo-50' : 'border-gray-200'}`}
+                        aria-pressed={invoiceData.template_id === t.id}
+                        aria-label={`Select template ${t.name}`}
+                      >
+                        {t.name}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-500 mt-2">No templates available</div>
+                )}
+              </div>
               {errors.business && (
                 <p className="text-red-600 text-sm mt-1">{safeGetErrorMessage(errors.business)}</p>
               )}
@@ -382,10 +470,10 @@ const CreateInvoice = () => {
                   required
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                 >
+                  <option value="NGN">Nigerian Naira (₦)</option>
                   <option value="USD">US Dollar ($)</option>
                   <option value="EUR">Euro (€)</option>
                   <option value="GBP">British Pound (£)</option>
-                  <option value="NGN">Nigerian Naira (₦)</option>
                   <option value="CAD">Canadian Dollar (C$)</option>
                   <option value="AUD">Australian Dollar (A$)</option>
                   <option value="JPY">Japanese Yen (¥)</option>

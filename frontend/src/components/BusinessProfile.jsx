@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Building, Plus, Edit, Trash2, ArrowLeft } from 'lucide-react';
 import businessService from '../services/businessService';
+import Spinner from './ui/Spinner';
+import ErrorBanner from './ui/ErrorBanner';
 
 const BusinessProfile = () => {
   const navigate = useNavigate();
@@ -16,7 +18,8 @@ const BusinessProfile = () => {
     phone_number: '',
     email: '',
     website: '',
-    tax_id: ''
+    tax_id: '',
+    logo: null
   });
   const [errors, setErrors] = useState({});
 
@@ -44,6 +47,14 @@ const BusinessProfile = () => {
     setFormData({
       ...formData,
       [e.target.name]: e.target.value
+    });
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files && e.target.files[0];
+    setFormData({
+      ...formData,
+      logo: file || null
     });
   };
 
@@ -92,7 +103,8 @@ const BusinessProfile = () => {
       phone_number: business.phone_number || '',
       email: business.email || '',
       website: business.website || '',
-      tax_id: business.tax_id || ''
+      tax_id: business.tax_id || '',
+      logo: null
     });
     setIsEditing(true);
     setShowForm(true);
@@ -150,17 +162,10 @@ const BusinessProfile = () => {
           </button>
         </div>
 
-        {errors.general && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-            {errors.general}
-          </div>
-        )}
+        {errors.general && <ErrorBanner message={errors.general} />}
 
         {isLoading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-            <span className="ml-3 text-gray-600">Loading businesses...</span>
-          </div>
+          <Spinner label="Loading businesses..." />
         ) : businesses.length === 0 ? (
           <div className="text-center py-12">
             <Building className="w-16 h-16 text-gray-400 mx-auto mb-4" />
@@ -171,22 +176,29 @@ const BusinessProfile = () => {
             {businesses.map(business => (
               <div key={business.id} className="bg-white p-6 rounded-lg shadow-sm border">
                 <h3 className="text-xl font-semibold text-gray-900 mb-4">{business.name}</h3>
-                <div className="space-y-2 text-gray-600">
-                  {business.address && <p>{business.address}</p>}
-                  {business.phone_number && <p>{business.phone_number}</p>}
-                  {business.email && <p>{business.email}</p>}
-                  {business.website && (
-                    <p>
-                      <a
-                        href={business.website}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-indigo-600 hover:text-indigo-800"
-                      >
-                        {business.website}
-                      </a>
-                    </p>
+                <div className="flex items-start gap-4">
+                  {business.logo_url ? (
+                    <img src={business.logo_url} alt={`${business.name} logo`} className="w-20 h-20 object-contain mr-4 rounded" />
+                  ) : (
+                    <div className="w-20 h-20 bg-gray-100 flex items-center justify-center rounded">No Logo</div>
                   )}
+                  <div className="space-y-2 text-gray-600">
+                    {business.address && <p>{business.address}</p>}
+                    {business.phone_number && <p>{business.phone_number}</p>}
+                    {business.email && <p>{business.email}</p>}
+                    {business.website && (
+                      <p>
+                        <a
+                          href={business.website}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-indigo-600 hover:text-indigo-800"
+                        >
+                          {business.website}
+                        </a>
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div className="flex gap-2 mt-6">
                   <button
@@ -289,6 +301,21 @@ const BusinessProfile = () => {
                       onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                     />
+                  </div>
+
+                  <div>
+                    <label htmlFor="logo" className="block text-sm font-medium text-gray-700 mb-2">Logo (optional)</label>
+                    <input
+                      type="file"
+                      id="logo"
+                      name="logo"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className="w-full"
+                    />
+                    {formData.logo && (
+                      <p className="text-sm text-gray-600 mt-2">Selected file: {formData.logo.name}</p>
+                    )}
                   </div>
 
                   <div className="flex gap-3 pt-4">

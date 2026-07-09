@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from .models import Invoice, InvoiceLineItem, Receipt
+from django.db import transaction
+from .models import Invoice, InvoiceLineItem, Receipt, InvoiceTemplate
 
 
 class InvoiceLineItemSerializer(serializers.ModelSerializer):
@@ -12,27 +13,41 @@ class InvoiceLineItemSerializer(serializers.ModelSerializer):
 
 class InvoiceSerializer(serializers.ModelSerializer):
     line_items = InvoiceLineItemSerializer(many=True)
+    business_logo_url = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Invoice
         fields = '__all__'
         read_only_fields = ('created_by', 'created_at', 'updated_at', 'subtotal', 'tax_amount', 'total_amount', 'invoice_number')
 
+    def get_business_logo_url(self, obj):
+        request = self.context.get('request')
+        if obj.business and obj.business.logo:
+            try:
+                url = obj.business.logo.url
+            except ValueError:
+                return None
+            if request:
+                return request.build_absolute_uri(url)
+            return url
+        return None
+
     def generate_invoice_number(self):
-        """Generate a unique invoice number"""
-        while True:
-            last_invoice = Invoice.objects.order_by('-id').first()
-            if last_invoice and last_invoice.invoice_number.startswith('INV-'):
+        """Generate a unique invoice number within a transaction to prevent race conditions."""
+        with transaction.atomic():
+            # Lock the table to prevent other transactions from reading until this one is done.
+            last_invoice = Invoice.objects.select_for_update().order_by('-id').first()
+            if last_invoice and last_invoice.invoice_number and last_invoice.invoice_number.startswith('INV-'):
                 try:
                     last_number = int(last_invoice.invoice_number.split('-')[1])
                     new_number = last_number + 1
                 except (ValueError, IndexError):
-                    new_number = 1
+                    new_number = 1 # Fallback if parsing fails
             else:
-                new_number = 1
+                new_number = 1 # First invoice
+            
             invoice_number = f'INV-{new_number:04d}'
-            if not Invoice.objects.filter(invoice_number=invoice_number).exists():
-                return invoice_number
+            return invoice_number
 
     def create(self, validated_data, **kwargs):
         # created_by may be passed either as kwarg to save or included in validated_data by DRF
@@ -143,30 +158,96 @@ class ReceiptSerializer(serializers.ModelSerializer):
     invoice_number = serializers.CharField(source='invoice.invoice_number', read_only=True)
     client_name = serializers.CharField(source='invoice.client_name', read_only=True)
     business_name = serializers.CharField(source='invoice.business.name', read_only=True)
+    currency = serializers.CharField(source='invoice.currency', read_only=True)
+    line_items = InvoiceLineItemSerializer(source='invoice.line_items', many=True, read_only=True)
+    business_logo_url = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = Receipt
         fields = '__all__'
-        read_only_fields = ('created_by', 'created_at', 'updated_at')
+        read_only_fields = ('created_by', 'created_at', 'updated_at', 'receipt_number')
+
+    def get_business_logo_url(self, obj):
+        request = self.context.get('request')
+        if obj.invoice and obj.invoice.business and obj.invoice.business.logo:
+            try:
+                url = obj.invoice.business.logo.url
+            except ValueError:
+                return None
+            if request:
+                return request.build_absolute_uri(url)
+            return url
+        return None
 
     def generate_receipt_number(self):
-        """Generate a unique receipt number like RCPT-0001"""
-        while True:
-            last = Receipt.objects.order_by('-id').first()
-            if last and isinstance(last.receipt_number, str) and last.receipt_number.startswith('RCPT-'):
+        """Generate a unique receipt number within a transaction to prevent race conditions."""
+        with transaction.atomic():
+            # Lock the table to prevent other transactions from reading until this one is done.
+            last_receipt = Receipt.objects.select_for_update().order_by('-id').first()
+            if last_receipt and last_receipt.receipt_number and last_receipt.receipt_number.startswith('REC-'):
                 try:
-                    last_num = int(last.receipt_number.split('-')[1])
-                    new_num = last_num + 1
-                except Exception:
-                    new_num = 1
+                    last_number = int(last_receipt.receipt_number.split('-')[1])
+                    new_number = last_number + 1
+                except (ValueError, IndexError):
+                    new_number = 1 # Fallback if parsing fails
             else:
-                new_num = 1
-            receipt_number = f'RCPT-{new_num:04d}'
-            if not Receipt.objects.filter(receipt_number=receipt_number).exists():
-                return receipt_number
+                new_number = 1 # First receipt
+            
+            receipt_number = f'REC-{new_number:04d}'
+            return receipt_number
 
     def create(self, validated_data):
-        # Ensure a receipt_number is present; auto-generate if missing
-        if not validated_data.get('receipt_number'):
-            validated_data['receipt_number'] = self.generate_receipt_number()
+        # Generate receipt number
+        validated_data['receipt_number'] = self.generate_receipt_number()
         return super().create(validated_data)
+
+
+class RecurringInvoiceSerializer(serializers.ModelSerializer):
+    client_name = serializers.CharField(source='client.name', read_only=True)
+
+    class Meta:
+        model = None
+        fields = '__all__'
+        read_only_fields = ('id', 'created_at', 'updated_at', 'last_generated_at')
+
+    def to_representation(self, instance):
+        from .models import RecurringInvoice
+        self.Meta.model = RecurringInvoice
+        return super().to_representation(instance)
+
+    def create(self, validated_data):
+        if not validated_data.get('next_run_date'):
+            validated_data['next_run_date'] = validated_data.get('start_date')
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        return super().update(instance, validated_data)
+
+
+class ReminderRuleSerializer(serializers.ModelSerializer):
+    business_name = serializers.CharField(source='business.name', read_only=True)
+    invoice_number = serializers.CharField(source='invoice.invoice_number', read_only=True)
+
+    class Meta:
+        model = None
+        fields = '__all__'
+        read_only_fields = ('id', 'created_at', 'updated_at', 'last_sent')
+
+    def to_representation(self, instance):
+        from .models import ReminderRule
+        self.Meta.model = ReminderRule
+        return super().to_representation(instance)
+
+
+class InvoiceTemplateSerializer(serializers.ModelSerializer):
+    business_name = serializers.CharField(source='business.name', read_only=True)
+
+    class Meta:
+        model = InvoiceTemplate
+        fields = '__all__'
+        read_only_fields = ('id', 'created_at', 'updated_at', 'created_by')
+
+    def to_representation(self, instance):
+        from .models import InvoiceTemplate
+        self.Meta.model = InvoiceTemplate
+        return super().to_representation(instance)

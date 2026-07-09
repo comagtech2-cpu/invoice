@@ -1,7 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import invoiceService from '../services/invoiceService';
 import businessService from '../services/businessService';
+import { formatCurrency } from '../utils/currency';
+import Spinner from './ui/Spinner';
+import ErrorBanner from './ui/ErrorBanner';
+import HomeButton from './ui/HomeButton';
 
 const InvoiceList = () => {
   const navigate = useNavigate();
@@ -18,12 +22,14 @@ const InvoiceList = () => {
     sort_by: '-created_at'
   });
   const [errors, setErrors] = useState({});
+  const searchDebounceRef = useRef(null);
 
   // Load invoices and businesses when component mounts
   useEffect(() => {
     loadBusinesses();
-    loadInvoices();
-  }, [currentPage, filters]);
+    fetchInvoices(filters, currentPage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const loadBusinesses = async () => {
     try {
@@ -34,23 +40,42 @@ const InvoiceList = () => {
     }
   };
 
-  const loadInvoices = async () => {
+  // Fetch invoices and apply client-side filtering/pagination
+  const fetchInvoices = async (filtersArg = {}, page = 1) => {
     try {
       setLoading(true);
-      // In a real implementation, we would pass filters and pagination params
-      // For now, we'll load all invoices
-      const response = await invoiceService.getAllInvoices();
-      // Handle paginated response
-      if (response.results) {
+
+      const pageSize = 10;
+      const params = {
+        search: filtersArg.search || undefined,
+        status: filtersArg.status || undefined,
+        business: filtersArg.business || undefined,
+        sort_by: filtersArg.sort_by || undefined,
+        page,
+        page_size: pageSize
+      };
+
+      const response = await invoiceService.getAllInvoices(params);
+
+      if (response && response.results) {
         setInvoices(response.results);
-        setTotalCount(response.count);
-        setTotalPages(Math.ceil(response.count / 10)); // Assuming page size of 10
+        setTotalCount(response.count || response.results.length);
+        setTotalPages(Math.max(1, Math.ceil((response.count || response.results.length) / pageSize)));
+      } else if (Array.isArray(response)) {
+        // Fallback - non-paginated response
+        const total = response.length;
+        const totalPagesCalc = Math.max(1, Math.ceil(total / pageSize));
+        const start = (page - 1) * pageSize;
+        setInvoices(response.slice(start, start + pageSize));
+        setTotalCount(total);
+        setTotalPages(totalPagesCalc);
       } else {
-        // Fallback for non-paginated response
-        setInvoices(Array.isArray(response) ? response : []);
-        setTotalCount(Array.isArray(response) ? response.length : 0);
+        setInvoices([]);
+        setTotalCount(0);
         setTotalPages(1);
       }
+
+      setErrors({});
     } catch (error) {
       const errMsg = (error && (error.detail || error.error || error.message)) || 'Failed to load invoices';
       setErrors({ general: errMsg });
@@ -63,16 +88,33 @@ const InvoiceList = () => {
   };
 
   const handleFilterChange = (name, value) => {
-    setFilters({
+    const next = {
       ...filters,
       [name]: value
-    });
+    };
+    setFilters(next);
     setCurrentPage(1); // Reset to first page when filters change
+
+    // Debounce search input to avoid too many fetches while typing
+    if (name === 'search') {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = setTimeout(() => {
+        fetchInvoices(next, 1);
+      }, 300);
+    } else {
+      // Immediate fetch for other filter changes
+      fetchInvoices(next, 1);
+    }
   };
 
   const handleSearch = (e) => {
     e.preventDefault();
-    loadInvoices();
+    // Ensure any debounced search is flushed immediately
+    if (searchDebounceRef.current) {
+      clearTimeout(searchDebounceRef.current);
+      searchDebounceRef.current = null;
+    }
+    fetchInvoices(filters, 1);
   };
 
   const getStatusBadgeClass = (status) => {
@@ -104,48 +146,53 @@ const InvoiceList = () => {
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= totalPages) {
       setCurrentPage(newPage);
+      fetchInvoices(filters, newPage);
     }
   };
 
+  // Refetch when the current page changes (covers other triggers)
+  useEffect(() => {
+    fetchInvoices(filters, currentPage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPage]);
+
   if (loading) {
-    return <div className="loading">Loading invoices...</div>;
+    return <Spinner label="Loading invoices..." />;
   }
 
   return (
-    <div className="invoice-list-container">
-      <div className="invoice-header">
-        <h2>Invoices</h2>
-        <div className="invoice-actions">
-          <button onClick={() => navigate('/dashboard')} className="btn-secondary">
-            Back to Dashboard
-          </button>
-          <button onClick={() => navigate('/invoices/create')} className="btn-primary">
+    <div className="invoice-list-container p-4">
+      <div className="invoice-header flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
+        <h2 className="text-xl font-semibold">Invoices</h2>
+        <div className="flex flex-wrap gap-2">
+          <HomeButton />
+          <button onClick={() => navigate('/invoices/create')} className="btn-primary w-full sm:w-auto">
             Create Invoice
           </button>
         </div>
       </div>
 
-      {errors.general && (
-        <div className="alert alert-danger">
-          {errors.general}
-        </div>
-      )}
+      {errors.general && <ErrorBanner message={errors.general} />}
 
-      <div className="invoice-filters">
+      <div className="invoice-filters mb-4">
         <form onSubmit={handleSearch} className="filter-form">
-          <div className="form-row">
-            <div className="form-group">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2">
+            <div>
               <input
                 type="text"
                 placeholder="Search invoices..."
                 value={filters.search}
                 onChange={(e) => handleFilterChange('search', e.target.value)}
+                className="input w-full"
+                aria-label="Search invoices"
               />
             </div>
-            <div className="form-group">
+            <div>
               <select
                 value={filters.status}
                 onChange={(e) => handleFilterChange('status', e.target.value)}
+                className="input w-full"
+                aria-label="Filter by status"
               >
                 <option value="">All Statuses</option>
                 <option value="draft">Draft</option>
@@ -155,10 +202,12 @@ const InvoiceList = () => {
                 <option value="cancelled">Cancelled</option>
               </select>
             </div>
-            <div className="form-group">
+            <div>
               <select
                 value={filters.business}
                 onChange={(e) => handleFilterChange('business', e.target.value)}
+                className="input w-full"
+                aria-label="Filter by business"
               >
                 <option value="">All Businesses</option>
                 {businesses.map(business => (
@@ -168,8 +217,8 @@ const InvoiceList = () => {
                 ))}
               </select>
             </div>
-            <div className="form-group">
-              <button type="submit" className="btn-secondary">Search</button>
+            <div>
+              <button type="submit" className="btn-secondary w-full">Search</button>
             </div>
           </div>
         </form>
@@ -177,80 +226,72 @@ const InvoiceList = () => {
 
       <div className="invoice-list">
         {invoices.length === 0 ? (
-          <div className="empty-state">
-            <p>No invoices found. Create your first invoice to get started.</p>
-            <button onClick={() => navigate('/invoices/create')} className="btn-primary">
-              Create Invoice
-            </button>
+          <div className="empty-state p-6 bg-white rounded shadow-sm text-center">
+            <p className="mb-3">No invoices found. Create your first invoice to get started.</p>
+            <button onClick={() => navigate('/invoices/create')} className="btn-primary">Create Invoice</button>
           </div>
         ) : (
           <>
-            <div className="invoice-table">
-              <div className="table-header">
-                <div className="table-cell sortable" onClick={() => handleSort(filters.sort_by === 'invoice_number' ? '-invoice_number' : 'invoice_number')}>
-                  Invoice # {filters.sort_by === 'invoice_number' ? '↑' : filters.sort_by === '-invoice_number' ? '↓' : ''}
-                </div>
-                <div className="table-cell sortable" onClick={() => handleSort(filters.sort_by === 'client_name' ? '-client_name' : 'client_name')}>
-                  Client {filters.sort_by === 'client_name' ? '↑' : filters.sort_by === '-client_name' ? '↓' : ''}
-                </div>
-                <div className="table-cell sortable" onClick={() => handleSort(filters.sort_by === 'issue_date' ? '-issue_date' : 'issue_date')}>
-                  Date {filters.sort_by === 'issue_date' ? '↑' : filters.sort_by === '-issue_date' ? '↓' : ''}
-                </div>
-                <div className="table-cell sortable" onClick={() => handleSort(filters.sort_by === 'due_date' ? '-due_date' : 'due_date')}>
-                  Due Date {filters.sort_by === 'due_date' ? '↑' : filters.sort_by === '-due_date' ? '↓' : ''}
-                </div>
-                <div className="table-cell">Currency</div>
-                <div className="table-cell sortable" onClick={() => handleSort(filters.sort_by === 'status' ? '-status' : 'status')}>
-                  Status {filters.sort_by === 'status' ? '↑' : filters.sort_by === '-status' ? '↓' : ''}
-                </div>
-                <div className="table-cell sortable" onClick={() => handleSort(filters.sort_by === 'total_amount' ? '-total_amount' : 'total_amount')}>
-                  Amount {filters.sort_by === 'total_amount' ? '↑' : filters.sort_by === '-total_amount' ? '↓' : ''}
-                </div>
-                <div className="table-cell">Actions</div>
-              </div>
-              {invoices.map(invoice => (
-                <div key={invoice.id} className="table-row">
-                  <div className="table-cell">{invoice.invoice_number}</div>
-                  <div className="table-cell">{invoice.client_name}</div>
-                  <div className="table-cell">{formatDate(invoice.issue_date)}</div>
-                  <div className="table-cell">{formatDate(invoice.due_date)}</div>
-                  <div className="table-cell">{invoice.currency}</div>
-                  <div className="table-cell">
-                    <span className={getStatusBadgeClass(invoice.status)}>
-                      {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
-                    </span>
+            {/* Table for md+ screens */}
+            <div className="hidden md:block overflow-x-auto bg-white rounded shadow-sm">
+              <table className="w-full table-auto">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="p-3 text-left">Invoice #</th>
+                    <th className="p-3 text-left">Client</th>
+                    <th className="p-3">Date</th>
+                    <th className="p-3">Due</th>
+                    <th className="p-3">Currency</th>
+                    <th className="p-3">Status</th>
+                    <th className="p-3">Amount</th>
+                    <th className="p-3">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices.map(invoice => (
+                    <tr key={invoice.id} className="border-t">
+                      <td className="p-3">{invoice.invoice_number}</td>
+                      <td className="p-3">{invoice.client_name}</td>
+                      <td className="p-3 text-center">{formatDate(invoice.issue_date)}</td>
+                      <td className="p-3 text-center">{formatDate(invoice.due_date)}</td>
+                      <td className="p-3 text-center">{invoice.currency}</td>
+                      <td className="p-3 text-center"><span className={getStatusBadgeClass(invoice.status)}>{invoice.status}</span></td>
+                      <td className="p-3 text-right">{formatCurrency(invoice?.total_amount ?? 0, invoice?.currency)}</td>
+                      <td className="p-3 text-center"><button onClick={() => navigate(`/invoices/${invoice.id}`)} className="btn-secondary btn-sm">View</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile list for small screens */}
+            <div className="md:hidden space-y-2">
+              {invoices.map(inv => (
+                <div key={inv.id} className="bg-white p-3 rounded shadow-sm">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="font-medium">{inv.invoice_number}</div>
+                      <div className="text-sm text-gray-600">{inv.client_name}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm">{formatCurrency(inv.total_amount, inv.currency)}</div>
+                      <div className="text-xs text-gray-500">{formatDate(inv.due_date)}</div>
+                    </div>
                   </div>
-                  <div className="table-cell">${Number(invoice?.total_amount ?? 0).toFixed(2)
-}</div>
-                  <div className="table-cell">
-                    <button
-                      onClick={() => navigate(`/invoices/${invoice.id}`)}
-                      className="btn-secondary btn-small"
-                    >
-                      View
-                    </button>
+                  <div className="mt-3 flex gap-2">
+                    <button onClick={() => navigate(`/invoices/${inv.id}`)} className="btn-secondary w-full">View</button>
                   </div>
                 </div>
               ))}
             </div>
 
             {totalPages > 1 && (
-              <div className="pagination">
-                <button 
-                  onClick={() => handlePageChange(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className="btn-secondary"
-                >
-                  Previous
-                </button>
-                <span>Page {currentPage} of {totalPages}</span>
-                <button 
-                  onClick={() => handlePageChange(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                  className="btn-secondary"
-                >
-                  Next
-                </button>
+              <div className="mt-4 flex items-center justify-between">
+                <div>
+                  <button onClick={() => handlePageChange(currentPage - 1)} disabled={currentPage === 1} className="btn-secondary mr-2">Previous</button>
+                  <button onClick={() => handlePageChange(currentPage + 1)} disabled={currentPage === totalPages} className="btn-secondary">Next</button>
+                </div>
+                <div className="text-sm text-gray-600">Page {currentPage} of {totalPages}</div>
               </div>
             )}
           </>

@@ -3,6 +3,10 @@ import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { FileText, DollarSign, Clock, CheckCircle, AlertTriangle, Plus, Eye, Building, BarChart3 } from 'lucide-react';
 import dashboardService from '../services/dashboardService';
+import { formatCurrency } from '../utils/currency';
+import reportService from '../services/reportService';
+import Spinner from './ui/Spinner';
+import ErrorBanner from './ui/ErrorBanner';
 
 const Dashboard = () => {
   const [summary, setSummary] = useState({
@@ -13,17 +17,8 @@ const Dashboard = () => {
     overdue_invoices: 0
   });
   const [loading, setLoading] = useState(true);
+  const [revenueData, setRevenueData] = useState([]);
   const [errors, setErrors] = useState({});
-
-  // Mock data for charts (in a real app, this would come from an API)
-  const revenueData = [
-    { month: 'Jan', revenue: 4000 },
-    { month: 'Feb', revenue: 3000 },
-    { month: 'Mar', revenue: 2000 },
-    { month: 'Apr', revenue: 2780 },
-    { month: 'May', revenue: 1890 },
-    { month: 'Jun', revenue: 2390 },
-  ];
 
   const statusData = [
     { name: 'Pending', value: summary.pending_invoices },
@@ -35,29 +30,31 @@ const Dashboard = () => {
 
   useEffect(() => {
     loadSummary();
+    loadChartData();
   }, []);
 
   const loadSummary = async () => {
     try {
-      setLoading(true);
       const data = await dashboardService.getSummary();
       setSummary(data);
     } catch (error) {
       setErrors({ general: error.error || 'Failed to load dashboard summary' });
+    }
+  };
+
+  const loadChartData = async () => {
+    try {
+      const reportData = await reportService.getReports();
+      setRevenueData(reportData.financial_report || []);
+    } catch (error) {
+      setErrors(prev => ({ ...prev, chart: error.error || 'Failed to load chart data' }));
     } finally {
       setLoading(false);
     }
   };
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading dashboard...</p>
-        </div>
-      </div>
-    );
+    return <Spinner label="Loading dashboard..." />;
   }
 
   return (
@@ -74,11 +71,7 @@ const Dashboard = () => {
           </Link>
         </div>
 
-        {errors.general && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-            {errors.general}
-          </div>
-        )}
+        {errors.general && <ErrorBanner message={errors.general} /> }
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
           <div className="bg-white p-6 rounded-lg shadow-sm border">
@@ -96,7 +89,7 @@ const Dashboard = () => {
               <DollarSign className="w-8 h-8 text-green-500" />
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Total Revenue</p>
-                <p className="text-2xl font-bold text-gray-900">${parseFloat(summary.total_revenue || 0).toFixed(2)}</p>
+                <p className="text-2xl font-bold text-gray-900">{formatCurrency(summary.total_revenue || 0, 'NGN')}</p>
               </div>
             </div>
           </div>
@@ -151,11 +144,12 @@ const Dashboard = () => {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis />
-                <Tooltip />
+                <Tooltip formatter={(value) => [formatCurrency(value, 'NGN'), 'Revenue']} />
                 <Legend />
                 <Bar dataKey="revenue" fill="#4F46E5" />
               </BarChart>
             </ResponsiveContainer>
+            {errors.chart && <p className="text-red-500 text-sm mt-2">{errors.chart}</p>}
           </div>
 
           <div className="bg-white p-6 rounded-lg shadow-sm border">

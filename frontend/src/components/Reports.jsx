@@ -3,6 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import reportService from '../services/reportService';
 import api from '../services/api';
+import { formatCurrency } from '../utils/currency';
+import Spinner from './ui/Spinner';
+import ErrorBanner from './ui/ErrorBanner';
+import HomeButton from './ui/HomeButton';
+
+
+
 
 const Reports = () => {
   const navigate = useNavigate();
@@ -90,23 +97,17 @@ const Reports = () => {
   };
 
   if (loading) {
-    return <div className="loading">Loading reports...</div>;
+    return <Spinner label="Loading reports..." />;
   }
 
   return (
-    <div className="reports-container">
-      <div className="reports-header">
-        <h2>Financial Reports</h2>
-        <button onClick={() => navigate('/dashboard')} className="btn-secondary">
-          Back to Dashboard
-        </button>
+    <div className="reports-container p-4">
+      <div className="reports-header flex items-center justify-between mb-4">
+        <h2 className="text-xl font-semibold">Financial Reports</h2>
+        <HomeButton />
       </div>
 
-      {errors.general && (
-        <div className="alert alert-danger">
-          {errors.general}
-        </div>
-      )}
+      {errors.general && <ErrorBanner message={errors.general} /> }
 
       <div className="reports-filters">
         <form onSubmit={handleFilterSubmit}>
@@ -185,9 +186,9 @@ const Reports = () => {
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="period" />
               <YAxis />
-              <Tooltip formatter={(value) => [`$${value}`, 'Revenue']} />
+              <Tooltip formatter={(value) => [formatCurrency(value, 'NGN'), 'Revenue']} />
               <Legend />
-              <Bar dataKey="revenue" fill="#8884d8" name="Revenue ($)" />
+              <Bar dataKey="revenue" fill="#8884d8" name="Revenue (₦)" />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -220,7 +221,7 @@ const Reports = () => {
                     {invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
                   </span>
                 </td>
-                <td>${invoice.total_amount.toFixed(2)}</td>
+                <td>{formatCurrency(invoice.total_amount, 'NGN')}</td>
               </tr>
             ))}
           </tbody>

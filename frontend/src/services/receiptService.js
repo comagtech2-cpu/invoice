@@ -24,9 +24,12 @@ class ReceiptService {
   // Create a new receipt
   async createReceipt(receiptData) {
     try {
+      
+    console.log("Receipt payload being sent:", receiptData);
       const response = await api.post('/receipts/', receiptData);
       return response.data;
     } catch (error) {
+       //console.error("Receipt error response:", error.response?.data);
       throw error.response.data;
     }
   }

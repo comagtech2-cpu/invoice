@@ -31,15 +31,13 @@ const Register = () => {
       navigate('/dashboard');
     } catch (error) {
       if (error.errors) {
-        // Validation errors
-        const formattedErrors = {};
-        error.errors.forEach((err, index) => {
-          formattedErrors[`error_${index}`] = err;
-        });
-        setErrors(formattedErrors);
+        // Field validation errors - format: { field: [messages] }
+        setErrors(error.errors);
+      } else if (typeof error === 'object' && error !== null) {
+        // Other structured errors
+        setErrors({ general: error.error || error.detail || JSON.stringify(error) });
       } else {
-        // Other errors
-        setErrors({ general: error.error || 'Registration failed' });
+        setErrors({ general: 'Registration failed' });
       }
     } finally {
       setLoading(false);
@@ -72,11 +70,12 @@ const Register = () => {
                 name="username"
                 type="text"
                 required
-                className="appearance-none relative block w-full px-10 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className={`appearance-none relative block w-full px-10 py-3 border ${errors.username ? 'border-red-500' : 'border-gray-300'} placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                 placeholder="Username"
                 value={formData.username}
                 onChange={handleChange}
               />
+              {errors.username && <p className="mt-1 text-sm text-red-600">{errors.username[0]}</p>}
             </div>
             <div className="relative">
               <label htmlFor="email" className="sr-only">Email address</label>
@@ -87,11 +86,12 @@ const Register = () => {
                 type="email"
                 autoComplete="email"
                 required
-                className="appearance-none relative block w-full px-10 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className={`appearance-none relative block w-full px-10 py-3 border ${errors.email ? 'border-red-500' : 'border-gray-300'} placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                 placeholder="Email address"
                 value={formData.email}
                 onChange={handleChange}
               />
+              {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email[0]}</p>}
             </div>
             <div className="relative">
               <label htmlFor="password" className="sr-only">Password</label>
@@ -102,11 +102,12 @@ const Register = () => {
                 type="password"
                 autoComplete="new-password"
                 required
-                className="appearance-none relative block w-full px-10 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className={`appearance-none relative block w-full px-10 py-3 border ${errors.password ? 'border-red-500' : 'border-gray-300'} placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm`}
                 placeholder="Password"
                 value={formData.password}
                 onChange={handleChange}
               />
+              {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password[0]}</p>}
             </div>
             <div className="relative">
               <label htmlFor="phone_number" className="sr-only">Phone Number</label>
