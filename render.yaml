@@ -32,7 +32,7 @@ services:
     healthCheckPath: /api/health/ # You should create this simple health check endpoint
     envVars:
       - key: DATABASE_URL
-        fromService:
+        fromDatabase:
           name: invoice-saas-db
           property: connectionString
       - key: CELERY_BROKER_URL
