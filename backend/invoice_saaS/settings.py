@@ -22,10 +22,10 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = config('SECRET_KEY')
+SECRET_KEY = config('SECRET_KEY', default='django-insecure-change-me')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config('DEBUG', default=False, cast=bool)
+DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1').split(',')
 
@@ -131,9 +131,14 @@ DEFAULT_FROM_EMAIL = config('DEFAULT_FROM_EMAIL', default='Invoice SaaS <noreply
 
 import dj_database_url
 
+DATABASE_URL = config(
+    'DATABASE_URL',
+    default='postgres://postgres:postgres@localhost:5432/invoice_saas'
+)
+
 DATABASES = {
-    'default': dj_database_url.config(
-        default='sqlite:///db.sqlite3',
+    'default': dj_database_url.parse(
+        DATABASE_URL,
         conn_max_age=600
     )
 }

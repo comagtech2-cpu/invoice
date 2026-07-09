@@ -57,6 +57,15 @@ services:
     startCommand: celery -A invoice_saaS worker --loglevel=info
     envVars:
       - fromGroup: invoice-saas-backend # Inherit env vars from the backend service
+      - key: DATABASE_URL
+        fromDatabase:
+          name: invoice-saas-db
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: invoice-saas-redis
+          property: connectionString
 
   # 5. Celery Beat for scheduled tasks
   - type: worker
@@ -68,10 +77,6 @@ services:
     startCommand: celery -A invoice_saaS beat --loglevel=info --scheduler django_celery_beat.schedulers:DatabaseScheduler
     envVars:
       - fromGroup: invoice-saas-backend # Inherit env vars from the backend service
-
-envVarGroups:
-  - name: invoice-saas-backend
-    envVars:
       - key: DATABASE_URL
         fromDatabase:
           name: invoice-saas-db
@@ -81,6 +86,10 @@ envVarGroups:
           type: redis
           name: invoice-saas-redis
           property: connectionString
+
+envVarGroups:
+  - name: invoice-saas-backend
+    envVars:
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG
