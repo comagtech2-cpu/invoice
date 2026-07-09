@@ -3,9 +3,9 @@
 
 services:
   # 1. Frontend Static Site
-  - type: static
+  - type: web
     name: invoice-saas-frontend
-    env: node
+    runtime: static
     rootDir: frontend
     buildCommand: npm install && npm run build
     publishDir: dist
@@ -24,7 +24,7 @@ services:
   # 3. Backend Web Service (Django/Gunicorn)
   - type: web
     name: invoice-saas-backend
-    env: python
+    runtime: python
     rootDir: backend
     plan: free # Or a paid plan for production
     buildCommand: ./deploy.sh
@@ -51,7 +51,7 @@ services:
   # 4. Celery Worker for background tasks
   - type: worker
     name: invoice-saas-celery-worker
-    env: python
+    runtime: python
     rootDir: backend
     plan: free
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
@@ -62,7 +62,7 @@ services:
   # 5. Celery Beat for scheduled tasks
   - type: worker
     name: invoice-saas-celery-beat
-    env: python
+    runtime: python
     rootDir: backend
     plan: free
     buildCommand: pip install --upgrade pip && pip install -r requirements.txt
