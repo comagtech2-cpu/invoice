@@ -33,7 +33,7 @@ services:
     envVars:
       - key: DATABASE_URL
         fromService:
-          type: psql
+          type: postgres
           name: invoice-saas-db # Assumes a Render PostgreSQL DB named this
           property: connectionString
       - key: CELERY_BROKER_URL
